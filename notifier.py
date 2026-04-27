@@ -22,16 +22,18 @@ def send_price_alert(user_id, item_name, current_price, previous_price, url):
         f"Buy here: {url}"
     )
 
+    import uuid
     payload = {
         "chatGuid": f"iMessage;-;{user['phone']}",
         "message": message,
         "method": "apple-script",
-        "password": config.BLUEBUBBLES_PASSWORD,
+        "tempGuid": str(uuid.uuid4()),
     }
 
     try:
         resp = httpx.post(
             f"{config.BLUEBUBBLES_URL}/api/v1/message/text",
+            params={"password": config.BLUEBUBBLES_PASSWORD},
             json=payload,
             timeout=10,
         )
