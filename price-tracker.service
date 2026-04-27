@@ -4,9 +4,9 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/shoe-price-tracker
-ExecStart=/home/pi/shoe-price-tracker/venv/bin/python app.py
+User=admin
+WorkingDirectory=/home/admin/shoe-price-tracker
+ExecStart=/home/admin/shoe-price-tracker/venv/bin/python app.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1

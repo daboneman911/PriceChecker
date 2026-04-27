@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-PI="${PI_HOST:-pi@100.110.110.93}"
+PI="${PI_HOST:-admin@100.104.75.80}"
 
 echo "Deploying to $PI..."
 rsync -avz \
