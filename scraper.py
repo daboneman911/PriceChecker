@@ -3,7 +3,7 @@ import json
 import httpx
 from bs4 import BeautifulSoup
 
-_PRICE_RE = re.compile(r"[\$£€]?\s*([\d,]+\.?\d*)")
+_PRICE_RE = re.compile(r"[\$£€]?\s*([\d,]+\.\d{2})")
 _HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; PriceTracker/1.0)"}
 
 
@@ -33,7 +33,7 @@ def _extract_from_html(html):
                 if isinstance(offers, list):
                     offers = offers[0]
                 price = _parse_price(str(offers.get("price", "")))
-                if price:
+                if price is not None:
                     return price
         except (json.JSONDecodeError, AttributeError):
             continue
@@ -43,14 +43,14 @@ def _extract_from_html(html):
         tag = soup.find("meta", property=prop) or soup.find("meta", attrs={"name": prop})
         if tag:
             price = _parse_price(tag.get("content"))
-            if price:
+            if price is not None:
                 return price
 
     # Strategy 3: Schema.org microdata
     tag = soup.find(attrs={"itemprop": "price"})
     if tag:
         price = _parse_price(tag.get("content") or tag.get_text())
-        if price:
+        if price is not None:
             return price
 
     # Strategy 4: Common CSS class patterns
@@ -58,7 +58,7 @@ def _extract_from_html(html):
         tag = soup.find(class_=re.compile(pattern, re.IGNORECASE))
         if tag:
             price = _parse_price(tag.get_text())
-            if price:
+            if price is not None:
                 return price
 
     return None
@@ -75,11 +75,12 @@ def _fetch_playwright(url):
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url, wait_until="networkidle", timeout=30000)
-        html = page.content()
-        browser.close()
-        return html
+        try:
+            page = browser.new_page()
+            page.goto(url, wait_until="networkidle", timeout=30000)
+            return page.content()
+        finally:
+            browser.close()
 
 
 def get_price(url):
@@ -97,7 +98,11 @@ def get_price(url):
         pass
 
     # Playwright path
-    html = _fetch_playwright(url)
+    try:
+        html = _fetch_playwright(url)
+    except Exception as exc:
+        raise ValueError(f"Could not extract price from {url}") from exc
+
     price = _extract_from_html(html)
     if price is not None:
         return price
