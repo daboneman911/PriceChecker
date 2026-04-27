@@ -154,7 +154,18 @@ _STATUS_HTML = """<!DOCTYPE html>
     .rise { background: #f8d7da; }
     .flat { background: #f8f9fa; }
     a { color: #0066cc; }
+    .remove-btn { background: none; border: none; cursor: pointer; font-size: 16px; padding: 2px 6px;
+                  border-radius: 4px; color: #cc0000; }
+    .remove-btn:hover { background: #fde8e8; }
   </style>
+  <script>
+    function removeItem(id, btn) {
+      if (!confirm('Remove this item?')) return;
+      fetch('/remove/' + id, {method: 'DELETE'})
+        .then(r => r.json())
+        .then(() => btn.closest('tr').remove());
+    }
+  </script>
 </head>
 <body>
 <div class="header">
@@ -167,7 +178,7 @@ _STATUS_HTML = """<!DOCTYPE html>
 <table>
   <tr>
     <th>#</th><th>User</th><th>Item</th><th>URL</th>
-    <th>Initial</th><th>Last</th><th>Change</th><th>Last Checked</th>
+    <th>Initial</th><th>Last</th><th>Change</th><th>Last Checked</th><th></th>
   </tr>
   {% for item in items %}
   {% set change = item.last_price - item.initial_price %}
@@ -181,6 +192,7 @@ _STATUS_HTML = """<!DOCTYPE html>
     <td>${{ "%.2f"|format(item.last_price) }}</td>
     <td>{{ "%+.1f"|format(pct) }}%</td>
     <td>{{ item.last_checked_at or "never" }}</td>
+    <td><button class="remove-btn" onclick="removeItem({{ item.id }}, this)">🗑</button></td>
   </tr>
   {% endfor %}
 </table>
