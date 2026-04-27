@@ -38,7 +38,7 @@ def test_send_alert_returns_true_on_success(mock_config):
     assert "89.99" in payload["message"]
     assert "120.00" in payload["message"]
     assert "https://example.com/airmax" in payload["message"]
-    assert payload["password"] == "testpass"
+    assert call_kwargs.kwargs["params"]["password"] == "testpass"
 
 
 def test_send_alert_includes_savings(mock_config):
