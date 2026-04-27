@@ -1,7 +1,12 @@
 from flask import Flask, request, jsonify, render_template_string, session, redirect, url_for
 from functools import wraps
+import time
+import random
 import db
 import scraper
+
+_TEMP_PIN = {"pin": None, "expires": 0}
+_TEMP_PIN_DURATION = 19 * 60  # seconds
 
 app = Flask(__name__)
 
@@ -108,6 +113,7 @@ _FORM_HTML = """<!DOCTYPE html>
       <h2>👟 Track a Price</h2>
       <div class="nav">
         <a href="/status">Status</a>
+        <a href="/temp-pin">Temp PIN</a>
         <a href="/logout">Logout</a>
       </div>
     </div>
@@ -200,12 +206,22 @@ _STATUS_HTML = """<!DOCTYPE html>
 </html>"""
 
 
+def _valid_pin(entered):
+    import config
+    if entered == config.APP_PIN:
+        return True
+    if (_TEMP_PIN["pin"] and
+            entered == _TEMP_PIN["pin"] and
+            time.time() < _TEMP_PIN["expires"]):
+        return True
+    return False
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = False
     if request.method == "POST":
-        import config
-        if request.form.get("pin") == config.APP_PIN:
+        if _valid_pin(request.form.get("pin", "")):
             session["logged_in"] = True
             return redirect(url_for("index"))
         error = True
@@ -287,6 +303,45 @@ def remove(item_id):
         return jsonify({"error": "Item not found"}), 404
     db.remove_item(item_id)
     return jsonify({"deleted": item_id}), 200
+
+
+@app.route("/temp-pin")
+@login_required
+def temp_pin():
+    _TEMP_PIN["pin"] = str(random.randint(100000, 999999))
+    _TEMP_PIN["expires"] = time.time() + _TEMP_PIN_DURATION
+    expires_str = time.strftime("%I:%M %p", time.localtime(_TEMP_PIN["expires"]))
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Temp PIN</title>
+  <style>
+    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+    body {{ font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f2f2f7;
+            display: flex; align-items: center; justify-content: center; min-height: 100vh; }}
+    .card {{ background: white; padding: 40px 30px; border-radius: 20px; width: 90%;
+             max-width: 340px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); text-align: center; }}
+    .icon {{ font-size: 40px; margin-bottom: 12px; }}
+    h2 {{ font-size: 20px; color: #1c1c1e; margin-bottom: 8px; }}
+    .pin {{ font-size: 48px; font-weight: 700; letter-spacing: 8px; color: #007aff;
+            margin: 24px 0; font-variant-numeric: tabular-nums; }}
+    .expires {{ color: #8e8e93; font-size: 14px; margin-bottom: 24px; }}
+    .expires span {{ color: #ff3b30; font-weight: 600; }}
+    a {{ display: block; color: #007aff; text-decoration: none; font-size: 15px; }}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🔑</div>
+    <h2>Temporary PIN</h2>
+    <div class="pin">{_TEMP_PIN["pin"]}</div>
+    <p class="expires">Expires at <span>{expires_str}</span><br>(19 minutes)</p>
+    <a href="/">← Back to tracker</a>
+  </div>
+</body>
+</html>"""
+    return html
 
 
 if __name__ == "__main__":
