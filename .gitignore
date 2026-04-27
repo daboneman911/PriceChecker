@@ -6,3 +6,5 @@ watchlist.db
 monitor.log
 config.py
 .env
+.DS_Store
+.claude/
