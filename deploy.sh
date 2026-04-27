@@ -19,4 +19,4 @@ rsync -avz \
 
 echo "Restarting service..."
 ssh "$PI" "sudo systemctl restart price-tracker"
-echo "Done. Flask API is at http://$PI:5000/status"
+echo "Done. Flask API is at http://${PI#*@}:5000/status"

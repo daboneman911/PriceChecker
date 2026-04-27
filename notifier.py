@@ -1,4 +1,7 @@
+import logging
 import httpx
+
+log = logging.getLogger(__name__)
 
 
 def send_price_alert(user_id, item_name, current_price, previous_price, url):
@@ -35,5 +38,5 @@ def send_price_alert(user_id, item_name, current_price, previous_price, url):
         resp.raise_for_status()
         return True
     except Exception as e:
-        print(f"[notifier] Failed to send alert for {item_name}: {e}")
+        log.error("Failed to send alert for %s: %s", item_name, e)
         return False
