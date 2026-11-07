@@ -1,5 +1,0 @@
-flask
-httpx
-beautifulsoup4
-playwright
-pytest
