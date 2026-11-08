@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SP Time Calculator</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1b1d21;
+    --muted: #6b7079;
+    --border: #d9dce1;
+    --accent: #2563eb;
+    --accent-soft: #e8efff;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111316;
+      --card: #1b1e23;
+      --text: #eef0f3;
+      --muted: #9aa0aa;
+      --border: #2e333a;
+      --accent: #6b9bff;
+      --accent-soft: #1d2a45;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+  main { width: 100%; max-width: 420px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  .hint { color: var(--muted); margin: 0 0 24px; font-size: 0.95rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    display: grid;
+    gap: 16px;
+  }
+  label { display: grid; gap: 6px; font-weight: 600; font-size: 0.9rem; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; }
+  .tag {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    visibility: hidden;
+  }
+  input {
+    width: 100%;
+    font: inherit;
+    font-size: 1.4rem;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    color: var(--text);
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 54px;
+  }
+  input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .computed input { background: var(--accent-soft); border-color: var(--accent); }
+  .computed .tag { visibility: visible; }
+  .sub { color: var(--muted); font-size: 0.85rem; font-weight: 400; min-height: 1.2em; }
+  button {
+    font: inherit;
+    font-weight: 600;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+  }
+  button:active { transform: scale(0.98); }
+</style>
+</head>
+<body>
+<main>
+  <h1>SP Time Calculator</h1>
+  <p class="hint">Fill in any two fields. The third is calculated for you.</p>
+
+  <div class="card">
+    <label id="f-start">
+      <span class="row">Start time <span class="tag">Calculated</span></span>
+      <input type="time" id="start">
+    </label>
+
+    <label id="f-end">
+      <span class="row">End time <span class="tag">Calculated</span></span>
+      <input type="time" id="end">
+      <span class="sub" id="end-note"></span>
+    </label>
+
+    <label id="f-hours">
+      <span class="row">Total hours (decimal) <span class="tag">Calculated</span></span>
+      <input type="number" id="hours" inputmode="decimal" step="0.01" min="0" placeholder="0.00">
+      <span class="sub" id="hours-note"></span>
+    </label>
+
+    <button type="button" id="clear">Clear</button>
+  </div>
+</main>
+
+<script>
+  const fields = {
+    start: document.getElementById('start'),
+    end: document.getElementById('end'),
+    hours: document.getElementById('hours'),
+  };
+  const DAY = 1440;
+  // Most recently edited first; the field not in the top two is calculated.
+  let order = ['start', 'end', 'hours'];
+
+  const toMin = v => { const [h, m] = v.split(':').map(Number); return h * 60 + m; };
+  const toTime = min => {
+    min = ((Math.round(min) % DAY) + DAY) % DAY;
+    return String(Math.floor(min / 60)).padStart(2, '0') + ':' + String(min % 60).padStart(2, '0');
+  };
+  const hm = hrs => {
+    const total = Math.round(hrs * 60);
+    return `${Math.floor(total / 60)} h ${total % 60} min`;
+  };
+
+  function calculate() {
+    const target = order[2];
+    const s = fields.start.value, e = fields.end.value, h = fields.hours.value;
+    const hrs = parseFloat(h);
+
+    for (const k in fields) document.getElementById('f-' + k).classList.toggle('computed', k === target);
+
+    if (target === 'hours') {
+      fields.hours.value = (s && e) ? ((toMin(e) - toMin(s) + DAY) % DAY / 60).toFixed(2) : '';
+    } else if (target === 'end') {
+      fields.end.value = (s && h !== '' && !isNaN(hrs)) ? toTime(toMin(s) + hrs * 60) : '';
+    } else {
+      fields.start.value = (e && h !== '' && !isNaN(hrs)) ? toTime(toMin(e) - hrs * 60) : '';
+    }
+
+    const sv = fields.start.value, ev = fields.end.value, hv = parseFloat(fields.hours.value);
+    document.getElementById('hours-note').textContent = isNaN(hv) ? '' : '= ' + hm(hv);
+    const overnight = sv && ev && toMin(ev) < toMin(sv);
+    document.getElementById('end-note').textContent = overnight ? 'Next day' : '';
+  }
+
+  for (const key in fields) {
+    fields[key].addEventListener('input', () => {
+      order = [key, ...order.filter(k => k !== key)];
+      calculate();
+    });
+  }
+
+  document.getElementById('clear').addEventListener('click', () => {
+    for (const k in fields) fields[k].value = '';
+    order = ['start', 'end', 'hours'];
+    calculate();
+    fields.start.focus();
+  });
+
+  calculate();
+</script>
+</body>
+</html>
