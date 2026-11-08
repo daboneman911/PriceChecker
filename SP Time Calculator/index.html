@@ -70,18 +70,7 @@
   }
   input::placeholder { color: var(--muted); opacity: 0.6; }
   input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .ampm {
-    width: 72px;
-    font: inherit;
-    font-size: 1.1rem;
-    font-weight: 700;
-    border-radius: 10px;
-    border: 1px solid var(--border);
-    background: var(--card);
-    color: var(--text);
-    cursor: pointer;
-  }
-  .computed input, .computed .ampm { background: var(--accent-soft); border-color: var(--accent); }
+  .computed input { background: var(--accent-soft); border-color: var(--accent); }
   .computed .tag { visibility: visible; }
   .invalid input { border-color: var(--error); }
   .sub { color: var(--muted); font-size: 0.85rem; min-height: 1.2em; }
@@ -106,27 +95,19 @@
   <div class="card">
     <div class="field" id="f-start">
       <label for="start">Start time <span class="tag">Calculated</span></label>
-      <div class="inputs">
-        <input type="text" id="start" inputmode="numeric" autocomplete="off" placeholder="0:00">
-        <button type="button" class="ampm" id="start-ampm" data-pm="0">AM</button>
-      </div>
+      <input type="text" id="start" inputmode="numeric" autocomplete="off" placeholder="0:00">
       <span class="sub" id="start-note"></span>
     </div>
 
     <div class="field" id="f-end">
       <label for="end">End time <span class="tag">Calculated</span></label>
-      <div class="inputs">
-        <input type="text" id="end" inputmode="numeric" autocomplete="off" placeholder="0:00">
-        <button type="button" class="ampm" id="end-ampm" data-pm="1">PM</button>
-      </div>
+      <input type="text" id="end" inputmode="numeric" autocomplete="off" placeholder="0:00">
       <span class="sub" id="end-note"></span>
     </div>
 
     <div class="field" id="f-hours">
       <label for="hours">Total hours (decimal) <span class="tag">Calculated</span></label>
-      <div class="inputs">
-        <input type="text" id="hours" inputmode="decimal" autocomplete="off" placeholder="0.00">
-      </div>
+      <input type="text" id="hours" inputmode="decimal" autocomplete="off" placeholder="0.00">
       <span class="sub" id="hours-note"></span>
     </div>
 
@@ -136,26 +117,15 @@
 
 <script>
   const $ = id => document.getElementById(id);
-  const DAY = 1440;
   const KEYS = ['start', 'end', 'hours'];
-  const DEFAULT_PM = { start: false, end: true };
+  // Workday runs 8 AM - 5 PM, so 8-11 read as morning and 12, 1-7 as afternoon.
+  const DAY_START = 8 * 60, DAY_END = 20 * 60; // times a 12-hour entry can represent: 8:00 AM - 7:59 PM
   // Most recently edited first; the field not in the top two is calculated.
   let order = ['start', 'end', 'hours'];
 
-  const isPM = k => $(k + '-ampm').dataset.pm === '1';
-  function setPM(k, pm) {
-    const b = $(k + '-ampm');
-    b.dataset.pm = pm ? '1' : '0';
-    b.textContent = pm ? 'PM' : 'AM';
-  }
+  const formatDigits = d => d.length <= 2 ? d : d.slice(0, -2) + ':' + d.slice(-2);
 
-  // Digits as typed -> "3", "34", "3:45", "12:30"
-  function formatDigits(d) {
-    if (d.length <= 2) return d;
-    return d.slice(0, d.length - 2) + ':' + d.slice(-2);
-  }
-
-  // Returns minutes after midnight, or null. `final` accepts "3" as 3:00.
+  // Minutes after midnight, null if empty/incomplete, NaN if invalid. `final` accepts "3" as 3:00.
   function readTime(k, final) {
     const d = $(k).value.replace(/\D/g, '');
     if (!d) return null;
@@ -163,19 +133,20 @@
     if (d.length >= 3) { h = +d.slice(0, -2); m = +d.slice(-2); }
     else if (final) { h = +d; m = 0; }
     else return null;
-    if (m > 59 || h > 23) return NaN;
-    if (h === 0 || h > 12) return h * 60 + m;          // 24-hour entry, e.g. 1345 or 0030
-    return ((h % 12) + (isPM(k) ? 12 : 0)) * 60 + m;
+    if (m > 59 || h > 23 || h === 0) return NaN;
+    if (h < 8) h += 12;               // 1-7 -> 1 PM - 7 PM
+    return h * 60 + m;
   }
 
   function writeTime(k, min) {
-    min = ((Math.round(min) % DAY) + DAY) % DAY;
-    const h24 = Math.floor(min / 60), m = min % 60;
-    $(k).value = ((h24 % 12) || 12) + ':' + String(m).padStart(2, '0');
-    setPM(k, h24 >= 12);
+    min = Math.round(min);
+    if (min < DAY_START || min >= DAY_END) { $(k).value = ''; return false; }
+    const h = Math.floor(min / 60), m = min % 60;
+    $(k).value = ((h % 12) || 12) + ':' + String(m).padStart(2, '0');
+    return true;
   }
 
-  // Turn a 24-hour entry like 13:45 into 1:45 PM once the user leaves the field.
+  // Turn a 24-hour entry like 13:45 into 1:45 once the user leaves the field.
   function normalize(k) {
     const min = readTime(k, true);
     if (min != null && !isNaN(min)) writeTime(k, min);
@@ -188,6 +159,11 @@
     return isNaN(n) || n < 0 ? NaN : n;
   }
 
+  function setNote(k, text, bad) {
+    $(k + '-note').textContent = text;
+    $('f-' + k).classList.toggle('invalid', !!bad);
+  }
+
   function calculate(final) {
     const target = order[2];
     for (const k of KEYS) $('f-' + k).classList.toggle('computed', k === target);
@@ -197,28 +173,27 @@
     const h = target === 'hours' ? null : readHours();
     const ok = v => v != null && !isNaN(v);
 
+    for (const k of KEYS) setNote(k, '');
+    if (Number.isNaN(s)) setNote('start', 'Not a valid time', true);
+    if (Number.isNaN(e)) setNote('end', 'Not a valid time', true);
+    if (Number.isNaN(h)) setNote('hours', 'Enter a number, e.g. 7.5', true);
+
     if (target === 'hours') {
-      $('hours').value = ok(s) && ok(e) ? (((e - s + DAY) % DAY) / 60).toFixed(2) : '';
+      $('hours').value = '';
+      if (ok(s) && ok(e)) {
+        if (e < s) setNote('end', 'End must be after start', true);
+        else $('hours').value = ((e - s) / 60).toFixed(2);
+      }
     } else if (target === 'end') {
-      if (ok(s) && ok(h)) writeTime('end', s + h * 60); else { $('end').value = ''; setPM('end', DEFAULT_PM.end); }
+      $('end').value = '';
+      if (ok(s) && ok(h) && !writeTime('end', s + h * 60)) setNote('end', 'Goes past 7:59 PM', true);
     } else {
-      if (ok(e) && ok(h)) writeTime('start', e - h * 60); else { $('start').value = ''; setPM('start', DEFAULT_PM.start); }
+      $('start').value = '';
+      if (ok(e) && ok(h) && !writeTime('start', e - h * 60)) setNote('start', 'Starts before 8:00 AM', true);
     }
 
-    // Notes and validation
-    for (const k of ['start', 'end']) {
-      const bad = Number.isNaN(readTime(k, true));
-      $('f-' + k).classList.toggle('invalid', bad);
-      $(k + '-note').textContent = bad ? 'Not a valid time' : '';
-    }
     const hv = readHours();
-    $('f-hours').classList.toggle('invalid', Number.isNaN(hv));
-    if (Number.isNaN(hv)) $('hours-note').textContent = 'Enter a number, e.g. 7.5';
-    else if (hv != null) { const t = Math.round(hv * 60); $('hours-note').textContent = `= ${Math.floor(t / 60)} h ${t % 60} min`; }
-    else $('hours-note').textContent = '';
-
-    const sm = readTime('start', true), em = readTime('end', true);
-    if (ok(sm) && ok(em) && em < sm && !$('end-note').textContent) $('end-note').textContent = 'Next day';
+    if (ok(hv)) { const t = Math.round(hv * 60); setNote('hours', `= ${Math.floor(t / 60)} h ${t % 60} min`); }
   }
 
   function touch(k) { order = [k, ...order.filter(x => x !== k)]; }
@@ -226,20 +201,12 @@
   for (const k of ['start', 'end']) {
     const input = $(k);
     input.addEventListener('input', () => {
-      const raw = input.value;
-      if (/a/i.test(raw)) setPM(k, false);
-      if (/p/i.test(raw)) setPM(k, true);
-      input.value = formatDigits(raw.replace(/\D/g, '').slice(0, 4));
+      input.value = formatDigits(input.value.replace(/\D/g, '').slice(0, 4));
       touch(k);
       calculate(false);
     });
     input.addEventListener('blur', () => { normalize(k); calculate(true); });
     input.addEventListener('keydown', ev => { if (ev.key === 'Enter') input.blur(); });
-    $(k + '-ampm').addEventListener('click', () => {
-      setPM(k, !isPM(k));
-      if (order[2] !== k) touch(k); // flipping AM/PM on an entered time counts as editing it
-      calculate(true);
-    });
   }
 
   $('hours').addEventListener('input', () => {
@@ -253,8 +220,6 @@
 
   $('clear').addEventListener('click', () => {
     for (const k of KEYS) $(k).value = '';
-    setPM('start', DEFAULT_PM.start);
-    setPM('end', DEFAULT_PM.end);
     order = ['start', 'end', 'hours'];
     calculate(true);
     $('start').focus();
